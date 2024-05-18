@@ -1,3 +1,5 @@
+Dit is een proof of concept en moet verder uitgewerkt worden!
+
 # Process
 
  1. cleanText 
