@@ -111,28 +111,18 @@ public class StoryClustering {
             searcher.setSimilarity(new BM25Similarity());
 
             for (int i = 0; i < stories.size(); i++) {
-                TermQuery query = new TermQuery(new Term("content", stories.get(i)));
-                TopDocs topDocs = searcher.search(query, 1);
-                if (topDocs.totalHits.value > 0) {
-                    int docId = topDocs.scoreDocs[0].doc;
-                    Document doc = searcher.doc(docId);
-                    try {
-                        tfidfVectors[i] = Arrays.stream(doc.get("content").split("\\s+"))
-                                .mapToDouble(word -> {
-                                    try {
-                                        return (double) searcher.explain(new TermQuery(new Term("content", word)), docId).getValue();
-                                    } catch (IOException e) {
-                                        e.printStackTrace();
-                                        return 0.0;
-                                    }
-                                })
-                                .toArray();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        tfidfVectors[i] = new double[0];
+                // Initialize tfidfVectors with zero length
+                tfidfVectors[i] = new double[stories.size()];
+                String[] words = stories.get(i).split("\\s+");
+
+                for (String word : words) {
+                    Term term = new Term("content", word);
+                    TermQuery query = new TermQuery(term);
+                    TopDocs topDocs = searcher.search(query, 1);
+                    if (topDocs.totalHits.value > 0) {
+                        int docId = topDocs.scoreDocs[0].doc;
+                        tfidfVectors[i][docId] += ((Number) searcher.explain(query, docId).getValue()).doubleValue();
                     }
-                } else {
-                    tfidfVectors[i] = new double[0];
                 }
             }
         } catch (IOException e) {
@@ -200,13 +190,21 @@ public class StoryClustering {
         double dotProduct = 0.0;
         double normA = 0.0;
         double normB = 0.0;
+
         for (int i = 0; i < vector1.length; i++) {
             dotProduct += vector1[i] * vector2[i];
             normA += Math.pow(vector1[i], 2);
             normB += Math.pow(vector2[i], 2);
         }
+
+        // Prevent division by zero by ensuring norms are non-zero
+        if (normA == 0.0 || normB == 0.0) {
+            return 0.0;
+        }
+
         return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
     }
+
 
     private static List<String> generateClusterNames(List<List<String>> clusters) {
         List<String> clusterNames = new ArrayList<>();
