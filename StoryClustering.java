@@ -4,11 +4,16 @@ import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.*;
-import org.apache.lucene.search.*;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
+import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.RAMDirectory;
 
 import java.io.IOException;
 import java.util.*;
@@ -80,6 +85,7 @@ public class StoryClustering {
 
         // Print clusters with names
         printClusters(clusters, clusterNames);
+
     }
 
     private static String cleanText(String text) {
@@ -90,7 +96,7 @@ public class StoryClustering {
     }
 
     private static double[][] createTFIDFVectors(List<String> stories) {
-        Directory directory = new RAMDirectory();
+        Directory directory = new ByteBuffersDirectory();
         Analyzer analyzer = new StandardAnalyzer(new CharArraySet(STOPWORDS, true));
         IndexWriterConfig config = new IndexWriterConfig(analyzer);
 
@@ -121,7 +127,7 @@ public class StoryClustering {
                     TopDocs topDocs = searcher.search(query, 1);
                     if (topDocs.totalHits.value > 0) {
                         int docId = topDocs.scoreDocs[0].doc;
-                        tfidfVectors[i][docId] += ((Number) searcher.explain(query, docId).getValue()).doubleValue();
+                        tfidfVectors[i][docId] += searcher.explain(query, docId).getValue().doubleValue();
                     }
                 }
             }
