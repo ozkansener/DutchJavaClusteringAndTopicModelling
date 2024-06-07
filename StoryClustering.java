@@ -12,6 +12,7 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
+
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 
@@ -85,6 +86,8 @@ public class StoryClustering {
 
         // Print clusters with names
         printClusters(clusters, clusterNames);
+
+        generateUniqueDescriptions(cleanedStories);
 
     }
 
@@ -243,6 +246,25 @@ public class StoryClustering {
         }
     }
 
+    private static void generateUniqueDescriptions(List<String> stories) {
+        for (String story : stories) {
+            String[] words = story.split("\\s+");
+            Map<String, Integer> wordCounts = new HashMap<>();
+            for (String word : words) {
+                wordCounts.put(word, wordCounts.getOrDefault(word, 0) + 1);
+            }
+            List<Map.Entry<String, Integer>> sortedWords = wordCounts.entrySet()
+                    .stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                    .limit(5)
+                    .toList();
+            String uniqueDescription = sortedWords.stream()
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.joining(", "));
+            System.out.println("Unique description: " + uniqueDescription);
+        }
+    }
+
     private static List<String> generateStories() {
         List<String> stories = new ArrayList<>();
         // Verhaal 1: De moedige ridder
@@ -301,6 +323,9 @@ public class StoryClustering {
 
         // Verhaal 19: De jonge koning
         stories.add("In een ver koninkrijk werd een jonge prins plotseling koning na de dood van zijn vader. Hij was jong en onervaren, maar vastbesloten om een goede heerser te zijn. Met de hulp van zijn raadgevers en vrienden leerde hij snel en nam hij wijze beslissingen. Hij vocht tegen vijanden, verbeterde het leven van zijn volk en werd geliefd door iedereen. Onder zijn leiding bloeide het koninkrijk en leefde het volk in vrede en welvaart.");
+
+        // Verhaal 20: De magische vogel
+        stories.add("Er was eens een magische vogel die prachtige liederen zong en geluk bracht aan iedereen die hem hoorde. Op een dag werd de vogel gevangen door een boze heks die zijn magie wilde gebruiken voor kwade doeleinden. Een dappere jongen hoorde van de vogel en besloot hem te redden. Na een lange reis vol gevaren vond hij de vogel en bevrijdde hem. De vogel, dankbaar voor zijn vrijheid, zong een lied dat de vloek van de heks verbrak. De jongen keerde terug naar zijn dorp als een held en de vogel bleef voor altijd bij hem, zingend en geluk brengend aan iedereen.");
 
         // Verhaal 20: De magische vogel
         stories.add("Er was eens een magische vogel die prachtige liederen zong en geluk bracht aan iedereen die hem hoorde. Op een dag werd de vogel gevangen door een boze heks die zijn magie wilde gebruiken voor kwade doeleinden. Een dappere jongen hoorde van de vogel en besloot hem te redden. Na een lange reis vol gevaren vond hij de vogel en bevrijdde hem. De vogel, dankbaar voor zijn vrijheid, zong een lied dat de vloek van de heks verbrak. De jongen keerde terug naar zijn dorp als een held en de vogel bleef voor altijd bij hem, zingend en geluk brengend aan iedereen.");
