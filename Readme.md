@@ -6,6 +6,7 @@ Dit is een proof of concept en moet verder uitgewerkt worden!
  2. TF-IDF
  3. CalculateSimilarityMatrix
  4. clusterStoriesWithKMeans
+ 5. Topic Modelling for creating a unique description for each story
 
 # Pom
 ```
