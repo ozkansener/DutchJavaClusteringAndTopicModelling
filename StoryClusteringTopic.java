@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class StoryClustering {
+public class StoryClusteringTopic {
     private static final Set<String> STOPWORDS = new HashSet<>(Arrays.asList(
             "en", "een", "de", "hij", "het", "aan", "aangaande", "aangezien", "achte", "achter", "achterna",
             "af", "afgelopen", "al", "aldaar", "aldus", "alhoewel", "alias", "alle", "allebei", "alleen", "alles",
