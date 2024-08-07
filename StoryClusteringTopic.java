@@ -1,272 +1,18 @@
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.similarities.BM25Similarity;
+import cc.mallet.pipe.*;
+import cc.mallet.pipe.iterator.StringArrayIterator;
+import cc.mallet.topics.ParallelTopicModel;
+import cc.mallet.types.IDSorter;
+import cc.mallet.types.InstanceList;
+import org.apache.commons.text.similarity.JaccardSimilarity;
+import org.apache.commons.text.similarity.SimilarityScore;
 
-import org.apache.lucene.store.ByteBuffersDirectory;
-import org.apache.lucene.store.Directory;
-
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class StoryClusteringTopic {
-    private static final Set<String> STOPWORDS = new HashSet<>(Arrays.asList(
-            "en", "een", "de", "hij", "het", "aan", "aangaande", "aangezien", "achte", "achter", "achterna",
-            "af", "afgelopen", "al", "aldaar", "aldus", "alhoewel", "alias", "alle", "allebei", "alleen", "alles",
-            "als", "alsnog", "altijd", "altoos", "ander", "andere", "anders", "anderszins", "beetje", "behalve",
-            "behoudens", "beide", "beiden", "ben", "beneden", "bent", "bepaald", "betreffende", "bij", "bijna",
-            "bijv", "binnen", "binnenin", "blijkbaar", "blijken", "boven", "bovenal", "bovendien", "bovengenoemd",
-            "bovenstaand", "bovenvermeld", "buiten", "bv", "daar", "daardoor", "daarheen", "daarin", "daarna",
-            "daarnet", "daarom", "daarop", "daaruit", "daarvanlangs", "dan", "dat", "de", "deden", "deed", "der",
-            "derde", "derhalve", "dertig", "deze", "dhr", "die", "dikwijls", "dit", "doch", "doe", "doen", "doet",
-            "door", "doorgaand", "drie", "duizend", "dus", "echter", "een", "eens", "eer", "eerdat", "eerder",
-            "eerlang", "eerst", "eerste", "eigen", "eigenlijk", "elk", "elke", "en", "enig", "enige", "enigszins",
-            "enkel", "er", "erdoor", "erg", "ergens", "etc", "etcetera", "even", "eveneens", "evenwel", "gauw",
-            "ge", "gedurende", "geen", "gehad", "gekund", "geleden", "gelijk", "gemoeten", "gemogen", "genoeg",
-            "geweest", "gewoon", "gewoonweg", "haar", "haarzelf", "had", "hadden", "hare", "heb", "hebben", "hebt",
-            "hedden", "heeft", "heel", "hem", "hemzelf", "hen", "het", "hetzelfde", "hier", "hierbeneden",
-            "hierboven", "hierin", "hierna", "hierom", "hij", "hijzelf", "hoe", "hoewel", "honderd", "hun", "hunne",
-            "ieder", "iedere", "iedereen", "iemand", "iets", "ik", "ikzelf", "in", "inderdaad", "inmiddels",
-            "intussen", "inzake", "is", "ja", "je", "jezelf", "jij", "jijzelf", "jou", "jouw", "jouwe", "juist",
-            "jullie", "kan", "klaar", "kon", "konden", "krachtens", "kun", "kunnen", "kunt", "laatst", "later",
-            "liever", "lijken", "lijkt", "maak", "maakt", "maakte", "maakten", "maar", "mag", "maken", "me",
-            "meer", "meest", "meestal", "men", "met", "mevr", "mezelf", "mij", "mijn", "mijnent", "mijner",
-            "mijzelf", "minder", "miss", "misschien", "missen", "mits", "mocht", "mochten", "moest", "moesten",
-            "moet", "moeten", "mogen", "mr", "mrs", "mw", "na", "naar", "nadat", "nam", "namelijk", "nee", "neem",
-            "negen", "nemen", "nergens", "net", "niemand", "niet", "niets", "niks", "noch", "nochtans", "nog",
-            "nogal", "nooit", "nu", "nv", "of", "ofschoon", "om", "omdat", "omhoog", "omlaag", "omstreeks",
-            "omtrent", "omver", "ondanks", "onder", "ondertussen", "ongeveer", "ons", "onszelf", "onze", "onzeker",
-            "ooit", "ook", "op", "opnieuw", "opzij", "over", "overal", "overeind", "overige", "overigens", "paar",
-            "pas", "per", "precies", "recent", "redelijk", "reeds", "rond", "rondom", "samen", "sedert", "sinds",
-            "sindsdien", "slechts", "sommige", "spoedig", "steeds", "tamelijk", "te", "tegen", "tegenover", "tenzij",
-            "terwijl", "thans", "tien", "tiende", "tijdens", "tja", "toch", "toe", "toen", "toenmaals", "toenmalig",
-            "tot", "totdat", "tussen", "twee", "tweede", "u", "uit", "uitgezonderd", "uw", "vaak", "vaakwat", "van",
-            "vanaf", "vandaan", "vanuit", "vanwege", "veel", "veeleer", "veertig", "verder", "verscheidene",
-            "verschillende", "vervolgens", "via", "vier", "vierde", "vijf", "vijfde", "vijftig", "vol", "volgend",
-            "volgens", "voor", "vooraf", "vooral", "vooralsnog", "voorbij", "voordat", "voordezen", "voordien",
-            "voorheen", "voorop", "voorts", "vooruit", "vrij", "vroeg", "waar", "waarom", "waarschijnlijk", "wanneer",
-            "want", "waren", "was", "wat", "we", "wederom", "weer", "weg", "wegens", "weinig", "wel", "weldra",
-            "welk", "welke", "werd", "werden", "werder", "wezen", "whatever", "wie", "wiens", "wier", "wij",
-            "wijzelf", "wil", "wilden", "willen", "word", "worden", "wordt", "zal", "ze", "zei", "zeker", "zelf",
-            "zelfde", "zelfs", "zes", "zeven", "zich", "zichzelf", "zij", "zijn", "zijne", "zijzelf", "zo", "zoals",
-            "zodat", "zodra", "zonder", "zou", "zouden", "zowat", "zulk", "zulke", "zullen", "zult"
-    ));
-
-    public static void main(String[] args) {
-        List<String> stories = generateStories();
-
-        // Preprocess the stories
-        List<String> cleanedStories = stories.stream().map(StoryClustering::cleanText).toList();
-
-        // Create TF-IDF vectors
-        double[][] tfidfVectors = createTFIDFVectors(cleanedStories);
-
-        // Calculate similarity matrix
-        double[][] similarityMatrix = calculateSimilarityMatrix(tfidfVectors);
-
-        // Print similarity matrix
-        printMatrix(similarityMatrix);
-
-        // Cluster the stories into 4 categories using KMeans
-        List<List<String>> clusters = clusterStoriesWithKMeans(tfidfVectors, cleanedStories, 4);
-
-        // Generate cluster names using the top terms in each cluster
-        List<String> clusterNames = generateClusterNames(clusters);
-
-        // Print clusters with names
-        printClusters(clusters, clusterNames);
-
-        generateUniqueDescriptions(cleanedStories);
-
-    }
-
-    private static String cleanText(String text) {
-        String cleanedText = text.replaceAll("[^a-zA-Z0-9\\s]", "").toLowerCase();
-        return Arrays.stream(cleanedText.split("\\s+"))
-                .filter(word -> !STOPWORDS.contains(word))
-                .collect(Collectors.joining(" "));
-    }
-
-    private static double[][] createTFIDFVectors(List<String> stories) {
-        Directory directory = new ByteBuffersDirectory();
-        Analyzer analyzer = new StandardAnalyzer(new CharArraySet(STOPWORDS, true));
-        IndexWriterConfig config = new IndexWriterConfig(analyzer);
-
-        try (IndexWriter writer = new IndexWriter(directory, config)) {
-            for (String story : stories) {
-                Document doc = new Document();
-                doc.add(new TextField("content", story, Field.Store.YES));
-                writer.addDocument(doc);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        double[][] tfidfVectors = new double[stories.size()][];
-
-        try (DirectoryReader reader = DirectoryReader.open(directory)) {
-            IndexSearcher searcher = new IndexSearcher(reader);
-            searcher.setSimilarity(new BM25Similarity());
-
-            for (int i = 0; i < stories.size(); i++) {
-                // Initialize tfidfVectors with zero length
-                tfidfVectors[i] = new double[stories.size()];
-                String[] words = stories.get(i).split("\\s+");
-
-                for (String word : words) {
-                    Term term = new Term("content", word);
-                    TermQuery query = new TermQuery(term);
-                    TopDocs topDocs = searcher.search(query, 1);
-                    if (topDocs.totalHits.value > 0) {
-                        int docId = topDocs.scoreDocs[0].doc;
-                        tfidfVectors[i][docId] += searcher.explain(query, docId).getValue().doubleValue();
-                    }
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return tfidfVectors;
-    }
-
-    private static double[][] calculateSimilarityMatrix(double[][] tfidfVectors) {
-        int n = tfidfVectors.length;
-        double[][] matrix = new double[n][n];
-
-        for (int i = 0; i < n; i++) {
-            for (int j = i; j < n; j++) {
-                double similarity = calculateSimilarity(tfidfVectors[i], tfidfVectors[j]);
-                matrix[i][j] = similarity;
-                matrix[j][i] = similarity;
-            }
-        }
-
-        return matrix;
-    }
-
-    private static void printMatrix(double[][] matrix) {
-        for (double[] row : matrix) {
-            for (double value : row) {
-                System.out.printf("%.2f ", value);
-            }
-            System.out.println();
-        }
-    }
-
-    private static List<List<String>> clusterStoriesWithKMeans(double[][] tfidfVectors, List<String> stories, int k) {
-        // Perform KMeans clustering with similarity threshold
-        List<Set<Integer>> clusters = new ArrayList<>();
-        for (int i = 0; i < k; i++) {
-            clusters.add(new HashSet<>());
-        }
-
-        boolean[] assigned = new boolean[stories.size()];
-        int clusterIndex = 0;
-
-        for (int i = 0; i < tfidfVectors.length; i++) {
-            if (assigned[i]) continue;
-            clusters.get(clusterIndex).add(i);
-            assigned[i] = true;
-            for (int j = 0; j < tfidfVectors.length; j++) {
-                if (!assigned[j] && calculateSimilarity(tfidfVectors[i], tfidfVectors[j]) > 0.9) {
-                    clusters.get(clusterIndex).add(j);
-                    assigned[j] = true;
-                }
-            }
-            clusterIndex = (clusterIndex + 1) % k;
-        }
-
-        return clusters.stream()
-                .map(cluster -> cluster.stream()
-                        .map(stories::get)
-                        .toList())
-                .toList();
-    }
-
-    private static double calculateSimilarity(double[] vector1, double[] vector2) {
-        double dotProduct = 0.0;
-        double normA = 0.0;
-        double normB = 0.0;
-
-        for (int i = 0; i < vector1.length; i++) {
-            dotProduct += vector1[i] * vector2[i];
-            normA += Math.pow(vector1[i], 2);
-            normB += Math.pow(vector2[i], 2);
-        }
-
-        // Prevent division by zero by ensuring norms are non-zero
-        if (normA == 0.0 || normB == 0.0) {
-            return 0.0;
-        }
-
-        return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-    }
-
-
-    private static List<String> generateClusterNames(List<List<String>> clusters) {
-        List<String> clusterNames = new ArrayList<>();
-        for (List<String> cluster : clusters) {
-            String combinedText = String.join(" ", cluster);
-            String[] words = combinedText.split("\\s+");
-            Map<String, Integer> wordCounts = new HashMap<>();
-            for (String word : words) {
-                wordCounts.put(word, wordCounts.getOrDefault(word, 0) + 1);
-            }
-            List<Map.Entry<String, Integer>> sortedWords = wordCounts.entrySet()
-                    .stream()
-                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-                    .limit(5)
-                    .toList();
-            String clusterName = sortedWords.stream()
-                    .map(Map.Entry::getKey)
-                    .collect(Collectors.joining(", "));
-            clusterNames.add(clusterName);
-        }
-        return clusterNames;
-    }
-
-    private static void printClusters(List<List<String>> clusters, List<String> clusterNames) {
-        for (int i = 0; i < clusters.size(); i++) {
-            System.out.println("Cluster " + (i + 1) + " (" + clusterNames.get(i) + "):");
-            for (String story : clusters.get(i)) {
-                System.out.println(" - " + story);
-            }
-        }
-    }
-
-    private static void generateUniqueDescriptions(List<String> stories) {
-        for (String story : stories) {
-            String[] words = story.split("\\s+");
-            Map<String, Integer> wordCounts = new HashMap<>();
-            for (String word : words) {
-                wordCounts.put(word, wordCounts.getOrDefault(word, 0) + 1);
-            }
-            List<Map.Entry<String, Integer>> sortedWords = wordCounts.entrySet()
-                    .stream()
-                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-                    .limit(5)
-                    .toList();
-            String uniqueDescription = sortedWords.stream()
-                    .map(Map.Entry::getKey)
-                    .collect(Collectors.joining(", "));
-            System.out.println("Unique description: " + uniqueDescription);
-        }
-    }
-
     private static List<String> generateStories() {
         List<String> stories = new ArrayList<>();
+
         // Verhaal 1: De moedige ridder
         stories.add("Er was eens een dappere ridder genaamd Lancelot. Hij woonde in een groot kasteel met zijn koning en koningin. Op een dag hoorde Lancelot dat er een draak een naburig dorp terroriseerde. Zonder aarzelen vertrok hij op zijn stalen ros om het dorp te redden. Na een lange en gevaarlijke reis arriveerde Lancelot in het dorp. De draak was enorm en spuwde vuur uit zijn neusgaten. Maar Lancelot was niet bang. Hij vocht dapper tegen de draak en versloeg hem uiteindelijk. De dorpelingen juichten en vierden Lancelot als hun held.");
 
@@ -327,9 +73,186 @@ public class StoryClusteringTopic {
         // Verhaal 20: De magische vogel
         stories.add("Er was eens een magische vogel die prachtige liederen zong en geluk bracht aan iedereen die hem hoorde. Op een dag werd de vogel gevangen door een boze heks die zijn magie wilde gebruiken voor kwade doeleinden. Een dappere jongen hoorde van de vogel en besloot hem te redden. Na een lange reis vol gevaren vond hij de vogel en bevrijdde hem. De vogel, dankbaar voor zijn vrijheid, zong een lied dat de vloek van de heks verbrak. De jongen keerde terug naar zijn dorp als een held en de vogel bleef voor altijd bij hem, zingend en geluk brengend aan iedereen.");
 
-        // Verhaal 20: De magische vogel
-        stories.add("Er was eens een magische vogel die prachtige liederen zong en geluk bracht aan iedereen die hem hoorde. Op een dag werd de vogel gevangen door een boze heks die zijn magie wilde gebruiken voor kwade doeleinden. Een dappere jongen hoorde van de vogel en besloot hem te redden. Na een lange reis vol gevaren vond hij de vogel en bevrijdde hem. De vogel, dankbaar voor zijn vrijheid, zong een lied dat de vloek van de heks verbrak. De jongen keerde terug naar zijn dorp als een held en de vogel bleef voor altijd bij hem, zingend en geluk brengend aan iedereen.");
+        return stories.stream()
+                .map(StoryClusteringBack::cleanText)
+                .collect(Collectors.toList());
+    }
 
-        return stories;
+    public static void main(String[] args) {
+        List<String> stories = generateStories();
+
+        // Calculate similarity matrix
+        double[][] similarityMatrix = calculateSimilarityMatrix(stories);
+
+        // Print similarity matrix
+        printMatrix(similarityMatrix);
+
+        // Cluster the stories into 3 categories
+        List<List<String>> clusters = clusterStories(stories, similarityMatrix, 3);
+
+        // Generate cluster names using topic modeling
+        List<String> clusterNames = generateClusterNames(clusters);
+
+        // Print clusters with names
+        printClusters(clusters, clusterNames);
+    }
+
+
+    private static String cleanText(String text) {
+        String[] stopwordsArray = {
+                "en", "een", "de", "hij", "het", "aan", "aangaande", "aangezien", "achte", "achter", "achterna",
+                "af", "afgelopen", "al", "aldaar", "aldus", "alhoewel", "alias", "alle", "allebei", "alleen", "alles",
+                "als", "alsnog", "altijd", "altoos", "ander", "andere", "anders", "anderszins", "beetje", "behalve",
+                "behoudens", "beide", "beiden", "ben", "beneden", "bent", "bepaald", "betreffende", "bij", "bijna",
+                "bijv", "binnen", "binnenin", "blijkbaar", "blijken", "boven", "bovenal", "bovendien", "bovengenoemd",
+                "bovenstaand", "bovenvermeld", "buiten", "bv", "daar", "daardoor", "daarheen", "daarin", "daarna",
+                "daarnet", "daarom", "daarop", "daaruit", "daarvanlangs", "dan", "dat", "de", "deden", "deed", "der",
+                "derde", "derhalve", "dertig", "deze", "dhr", "die", "dikwijls", "dit", "doch", "doe", "doen", "doet",
+                "door", "doorgaand", "drie", "duizend", "dus", "echter", "een", "eens", "eer", "eerdat", "eerder",
+                "eerlang", "eerst", "eerste", "eigen", "eigenlijk", "elk", "elke", "en", "enig", "enige", "enigszins",
+                "enkel", "er", "erdoor", "erg", "ergens", "etc", "etcetera", "even", "eveneens", "evenwel", "gauw",
+                "ge", "gedurende", "geen", "gehad", "gekund", "geleden", "gelijk", "gemoeten", "gemogen", "genoeg",
+                "geweest", "gewoon", "gewoonweg", "haar", "haarzelf", "had", "hadden", "hare", "heb", "hebben", "hebt",
+                "hedden", "heeft", "heel", "hem", "hemzelf", "hen", "het", "hetzelfde", "hier", "hierbeneden",
+                "hierboven", "hierin", "hierna", "hierom", "hij", "hijzelf", "hoe", "hoewel", "honderd", "hun", "hunne",
+                "ieder", "iedere", "iedereen", "iemand", "iets", "ik", "ikzelf", "in", "inderdaad", "inmiddels",
+                "intussen", "inzake", "is", "ja", "je", "jezelf", "jij", "jijzelf", "jou", "jouw", "jouwe", "juist",
+                "jullie", "kan", "klaar", "kon", "konden", "krachtens", "kun", "kunnen", "kunt", "laatst", "later",
+                "liever", "lijken", "lijkt", "maak", "maakt", "maakte", "maakten", "maar", "mag", "maken", "me",
+                "meer", "meest", "meestal", "men", "met", "mevr", "mezelf", "mij", "mijn", "mijnent", "mijner",
+                "mijzelf", "minder", "miss", "misschien", "missen", "mits", "mocht", "mochten", "moest", "moesten",
+                "moet", "moeten", "mogen", "mr", "mrs", "mw", "na", "naar", "nadat", "nam", "namelijk", "nee", "neem",
+                "negen", "nemen", "nergens", "net", "niemand", "niet", "niets", "niks", "noch", "nochtans", "nog",
+                "nogal", "nooit", "nu", "nv", "of", "ofschoon", "om", "omdat", "omhoog", "omlaag", "omstreeks",
+                "omtrent", "omver", "ondanks", "onder", "ondertussen", "ongeveer", "ons", "onszelf", "onze", "onzeker",
+                "ooit", "ook", "op", "opnieuw", "opzij", "over", "overal", "overeind", "overige", "overigens", "paar",
+                "pas", "per", "precies", "recent", "redelijk", "reeds", "rond", "rondom", "samen", "sedert", "sinds",
+                "sindsdien", "slechts", "sommige", "spoedig", "steeds", "tamelijk", "te", "tegen", "tegenover", "tenzij",
+                "terwijl", "thans", "tien", "tiende", "tijdens", "tja", "toch", "toe", "toen", "toenmaals", "toenmalig",
+                "tot", "totdat", "tussen", "twee", "tweede", "u", "uit", "uitgezonderd", "uw", "vaak", "vaakwat", "van",
+                "vanaf", "vandaan", "vanuit", "vanwege", "veel", "veeleer", "veertig", "verder", "verscheidene",
+                "verschillende", "vervolgens", "via", "vier", "vierde", "vijf", "vijfde", "vijftig", "vol", "volgend",
+                "volgens", "voor", "vooraf", "vooral", "vooralsnog", "voorbij", "voordat", "voordezen", "voordien",
+                "voorheen", "voorop", "voorts", "vooruit", "vrij", "vroeg", "waar", "waarom", "waarschijnlijk", "wanneer",
+                "want", "waren", "was", "wat", "we", "wederom", "weer", "weg", "wegens", "weinig", "wel", "weldra",
+                "welk", "welke", "werd", "werden", "werder", "wezen", "whatever", "wie", "wiens", "wier", "wij",
+                "wijzelf", "wil", "wilden", "willen", "word", "worden", "wordt", "zal", "ze", "zei", "zeker", "zelf",
+                "zelfde", "zelfs", "zes", "zeven", "zich", "zichzelf", "zij", "zijn", "zijne", "zijzelf", "zo", "zoals",
+                "zodat", "zodra", "zonder", "zou", "zouden", "zowat", "zulk", "zulke", "zullen", "zult"
+        };
+
+        Set<String> stopwords = new HashSet<>(Arrays.asList(stopwordsArray));
+        String cleanedText = text.replaceAll("[^a-zA-Z0-9\\s]", "").toLowerCase();
+        return Arrays.stream(cleanedText.split("\\s+"))
+                .filter(word -> !stopwords.contains(word))
+                .collect(Collectors.joining(" "));
+    }
+
+    private static double[][] calculateSimilarityMatrix(List<String> stories) {
+        int n = stories.size();
+        double[][] matrix = new double[n][n];
+        SimilarityScore<Double> similarityScore = new JaccardSimilarity();
+
+        for (int i = 0; i < n; i++) {
+            for (int j = i; j < n; j++) {
+                double similarity = similarityScore.apply(stories.get(i), stories.get(j));
+                matrix[i][j] = similarity;
+                matrix[j][i] = similarity;
+            }
+        }
+        return matrix;
+    }
+
+    private static void printMatrix(double[][] matrix) {
+        for (double[] row : matrix) {
+            for (double value : row) {
+                System.out.printf("%.2f ", value);
+            }
+            System.out.println();
+        }
+    }
+
+    private static List<List<String>> clusterStories(List<String> stories, double[][] similarityMatrix, int k) {
+        int n = stories.size();
+        List<Set<Integer>> clusters = new ArrayList<>();
+        for (int i = 0; i < k; i++) {
+            clusters.add(new HashSet<>());
+        }
+
+        boolean[] assigned = new boolean[n];
+        int clusterIndex = 0;
+
+        // Simple clustering by similarity threshold
+        for (int i = 0; n > 0 && i < n; i++) {
+            if (assigned[i]) continue;
+            clusters.get(clusterIndex).add(i);
+            assigned[i] = true;
+            for (int j = 0; j < n; j++) {
+                if (!assigned[j] && similarityMatrix[i][j] > 0.97) {
+                    clusters.get(clusterIndex).add(j);
+                    assigned[j] = true;
+                }
+            }
+            clusterIndex = (clusterIndex + 1) % k;
+        }
+
+        return clusters.stream()
+                .map(cluster -> cluster.stream()
+                        .map(stories::get)
+                        .collect(Collectors.toList()))
+                .collect(Collectors.toList());
+    }
+
+    private static List<String> generateClusterNames(List<List<String>> clusters) {
+        List<String> clusterNames = new ArrayList<>();
+        for (List<String> cluster : clusters) {
+            String[] documents = cluster.toArray(new String[0]);
+            List<String> topics = getTopWordsFromLDA(documents, 1);
+            String clusterName = String.join(", ", topics);
+            clusterNames.add(clusterName);
+        }
+        return clusterNames;
+    }
+
+    private static List<String> getTopWordsFromLDA(String[] documents, int numWords) {
+        List<Pipe> pipeList = new ArrayList<>();
+        pipeList.add(new Input2CharSequence("UTF-8"));
+        pipeList.add(new CharSequenceLowercase());
+        pipeList.add(new CharSequence2TokenSequence());
+
+        pipeList.add(new TokenSequence2FeatureSequence());
+
+        InstanceList instances = new InstanceList(new SerialPipes(pipeList));
+        instances.addThruPipe(new StringArrayIterator(documents));
+
+        int numTopics = 1;
+        ParallelTopicModel model = new ParallelTopicModel(numTopics);
+        model.addInstances(instances);
+        model.setNumIterations(1000);
+        model.setOptimizeInterval(10);
+        try {
+            model.estimate();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        ArrayList<TreeSet<IDSorter>> topicSortedWords = model.getSortedWords();
+        List<String> topWords = new ArrayList<>();
+        for (IDSorter idCountPair : topicSortedWords.get(0)) {
+            topWords.add((String) model.getAlphabet().lookupObject(idCountPair.getID()));
+            if (topWords.size() >= numWords) {
+                break;
+            }
+        }
+        return topWords;
+    }
+
+    private static void printClusters(List<List<String>> clusters, List<String> clusterNames) {
+        for (int i = 0; i < clusters.size(); i++) {
+            System.out.println("Cluster " + (i + 1) + " (" + clusterNames.get(i) + "):");
+            for (String story : clusters.get(i)) {
+                System.out.println(" - " + story);
+            }
+        }
     }
 }
